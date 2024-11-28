@@ -19,16 +19,35 @@ class TetrisGame
     end
 
     @color_index = {
-      black: [3, 0, 18],
-      red: [231, 20, 20],
-      light_green: [209, 234, 163],
-      green: [47, 196, 178],
-      dark_green: [18, 148, 127],
-      yellow: [239, 238, 157],
-      orange: [241, 120, 8],
-      purple: [219, 198, 235],
-      blue: [171, 194, 232],
-      gray: [128, 128, 128]
+      # Deep space blue-black for background (softer than pure black)
+      black: [16, 24, 32],
+      
+      # Warm raspberry red (less harsh than pure red)
+      red: [232, 53, 98],
+      
+      # Mint green (pastel but visible)
+      light_green: [162, 227, 159],
+      
+      # Teal (80s inspired)
+      green: [32, 178, 170],
+      
+      # Deep cyan (complementary to the teal)
+      dark_green: [0, 141, 151],
+      
+      # Banana yellow (warm but not harsh)
+      yellow: [255, 218, 121],
+      
+      # Coral orange (80s inspired)
+      orange: [255, 127, 80],
+      
+      # Lavender (soft purple that pops against dark background)
+      purple: [230, 190, 255],
+      
+      # Sky blue (lighter and more playful)
+      blue: [135, 206, 235],
+      
+      # Neutral gray (slightly warmer than pure gray)
+      gray: [147, 138, 147]
     }
     select_next_piece
     select_next_piece
@@ -120,14 +139,14 @@ class TetrisGame
     render_score
   end
 
-  def current_piece_colliding?(offset_x=0, offset_y=0)
-    return false if @current_piece.nil?
-
-    (0..(@current_piece.length - 1)).each do |x|
-      (0..(@current_piece[x].length - 1)).each do |y|
-        next unless @current_piece[x][y] != 0
-
-        if @current_piece_y + y >= @grid_h - 1
+  def piece_colliding?(piece, offset_x = 0, offset_y = 0)
+    return false if piece.nil?
+  
+    (0..(piece.length - 1)).each do |x|
+      (0..(piece[x].length - 1)).each do |y|
+        next unless piece[x][y] != 0
+  
+        if @current_piece_y + y + offset_y >= @grid_h - 1
           return true
         elsif @grid[@current_piece_x + x + offset_x][@current_piece_y + y + 1 + offset_y] != 0
           return true
@@ -164,7 +183,8 @@ class TetrisGame
                   end
 
     @current_piece_x = 5
-    @current_piece_y = 0
+    @current_piece_y = -1
+    @game_over = false
   end
 
   def plant_current_piece
@@ -199,7 +219,7 @@ class TetrisGame
 
     select_next_piece
 
-    return unless current_piece_colliding?
+    return unless piece_colliding?(@current_piece)
 
     @game_over = true
   end
@@ -221,6 +241,12 @@ class TetrisGame
     end
   end
 
+  def can_rotate?
+    rotated = @current_piece.transpose.map(&:reverse)
+    rotated_x = @current_piece_x + rotated.length
+    return piece_colliding?(rotated) == false && rotated_x <= @grid_w
+  end
+
   def iterate
     if @game_over
       $gtk.reset if @args.inputs.keyboard.key_down.space
@@ -228,29 +254,31 @@ class TetrisGame
     end
     @current_piece_x -= 1 if can_go?(:left)
     @current_piece_x += 1 if can_go?(:right)
+
     @next_move -= 20 if can_go?(:down)
-    rotate_current_piece_left if @args.inputs.keyboard.key_down.space
+    rotate_current_piece_left if @args.inputs.keyboard.key_down.space && can_rotate?
 
     @next_move -= 1
     return unless @next_move <= 0
 
-    plant_current_piece if current_piece_colliding?
+    plant_current_piece if piece_colliding?(@current_piece)
     @current_piece_y += 1
     @next_move = 30
   end
-end
 
-def can_go?(direction, k = @args.inputs.keyboard)
-  case direction
-  when :left
-    k.key_down.left && @current_piece_x.positive? && current_piece_colliding?(-1, 0) == false
-  when :right
-    k.key_down.right && @current_piece_x < @grid_w - @current_piece.length &&
-      current_piece_colliding?(1, 0) == false
-  when :down
-    k.key_down.down || k.key_held.down
+  def can_go?(direction, k = @args.inputs.keyboard)
+    case direction
+    when :left
+      k.key_down.left && @current_piece_x.positive? && piece_colliding?(@current_piece, -1, 0) == false
+    when :right
+      k.key_down.right && @current_piece_x < @grid_w - @current_piece.length &&
+        piece_colliding?(@current_piece, 1, 0) == false
+    when :down
+      k.key_down.down || k.key_held.down
+    end
   end
 end
+
 
 def tick(args)
   args.state.game ||= TetrisGame.new args
